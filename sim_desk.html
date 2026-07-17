@@ -128,16 +128,14 @@
       <table><thead><tr><th>거래번호</th><th>날짜</th><th>알고리즘</th><th>구분</th><th>종목</th><th style="text-align:right">수량</th><th style="text-align:right">단가</th><th style="text-align:right">총액</th></tr></thead>
         <tbody id="blotter"><tr><td colspan="8"><div class="empty">‘다음 영업일’을 누르면 그날의 거래가 표시됩니다.</div></td></tr></tbody></table></section>
     <section class="col">
-      <h2>거래 소명 (감사 · LLM)</h2>
+      <h2>질의 (거래 소명 · 규정 검색 · LLM)</h2>
       <div class="ask">
-        <input id="askTid" placeholder="거래번호 (예: T-20260601-0001)">
-        <input id="askQ" placeholder="질문(선택) — 왜 이 거래를 했나?">
+        <input id="askQ" placeholder="예: T-20260601-0001 왜 샀어?  또는  공매도 규정 알려줘" style="flex:1">
         <button onclick="askTrade()">질의</button>
       </div>
       <div id="askAns"></div>
       <h2 style="margin-top:18px">진행 로그</h2><div id="log"></div></section>
   </div>
-</main>
 </main>
 <div class="overlay" id="overlay"><div class="modal" role="dialog" aria-modal="true">
   <div class="mh"><div class="ic" id="mIc"></div><h3 id="mTitle"></h3></div>
@@ -339,13 +337,18 @@ async function dealerReject(o){try{
   return r.substitute||null;
 }catch(e){return null;}}
 async function askTrade(){
-  const tid=$("#askTid").value.trim();const q=$("#askQ").value.trim();
-  if(!tid){$("#askAns").innerHTML='<div class="card">거래번호를 입력하세요.</div>';return;}
+  const q=$("#askQ").value.trim();
+  if(!q){$("#askAns").innerHTML='<div class="card">질문을 입력하세요. (예: T-… 왜 샀어? / 공매도 규정 알려줘)</div>';return;}
   $("#askAns").innerHTML='<div class="card">조회 중…</div>';
-  try{const r=await(await fetch("/api/sim/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({tid,question:q})})).json();
+  try{const r=await(await fetch("/api/sim/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:q})})).json();
     if(!r.found){$("#askAns").innerHTML=`<div class="card">${r.answer}</div>`;return;}
-    const t=r.trade;const rej=t.dealer_rejected?' · <span style="color:var(--red)">딜러거절</span>':'';
-    $("#askAns").innerHTML=`<div class="card"><div class="meta">${t.id} · ${t.date} · ${t.algo_kr} · ${t.name} ${t.side} ${t.qty.toLocaleString()}주 @ ₩${t.price.toLocaleString()}${rej}</div><div class="a">${r.answer}</div><div class="by" style="margin-top:6px">— ${r.by}</div></div>`;
+    if(r.kind==="reg"){                                  // 규정 검색 결과
+      const tags=(r.regs||[]).map(x=>`<code>${x.id}</code> ${x.title}`).join(' · ');
+      $("#askAns").innerHTML=`<div class="card"><div class="meta">규정 검색(RAG) · ${tags}</div><div class="a" style="white-space:pre-line">${r.answer}</div><div class="by" style="margin-top:6px">— ${r.by}</div></div>`;
+      return;
+    }
+    const t=r.trade;const rej=t.dealer_rejected?' · <span style="color:var(--red)">딜러거절</span>':'';  // 거래 소명 결과
+    $("#askAns").innerHTML=`<div class="card"><div class="meta">${t.id} · ${t.date} · ${t.algo_kr} · ${t.name} ${t.side} ${t.qty.toLocaleString()}주 @ ₩${t.price.toLocaleString()}${rej}</div><div class="a" style="white-space:pre-line">${r.answer}</div><div class="by" style="margin-top:6px">— ${r.by}</div></div>`;
   }catch(e){$("#askAns").innerHTML='<div class="card">조회 실패</div>';}
 }
 loadInit();

@@ -551,43 +551,76 @@ def sim_mcp_review():
         return jsonify({"ok": False, "msg": f"MCP 심사 실패: {e}"})
 
 
+import re as _re
+
+
 @app.route("/api/sim/ask", methods=["POST"])
 def sim_ask():
-    """거래번호로 '왜 이 거래를 했는지' 소명 질의 → LLM이 저장된 맥락으로 답변."""
+    """자연어 한 문장으로 질의. 문장에서 거래번호(T-YYYYMMDD-NNNN)가 보이면 그 거래를 소명하고,
+    없으면 KRX 규정 검색(RAG)으로 답한다.
+      예) 'T-20260601-0001 거래는 왜 했어?'  → 거래 소명
+          '공매도 규정 어떤 거 있어?'          → 규정 검색"""
     req = request.get_json(force=True)
-    tid = req.get("tid", "").strip().upper(); q = req.get("question", "").strip()
-    tr = S.get("trades", {}).get(tid)
-    if not tr:
+    q = (req.get("question") or req.get("q") or "").strip()
+    if not q:
+        return jsonify({"answer": "질문을 입력하세요. (예: 'T-20260601-0001 왜 샀어?' 또는 '공매도 규정 알려줘')",
+                        "by": "-", "found": False})
+
+    # 문장에서 거래번호 자동 추출
+    m = _re.search(r"T-\d{8}-\d{3,4}", q.upper())
+    tid = m.group(0) if m else ""
+    tr = S.get("trades", {}).get(tid) if tid else None
+
+    # ── 거래번호가 있고 존재하면: 거래 소명 ──
+    if tr:
+        saved = tr.get("reason", "")
+        ctx = tr.get("ctx") or {}
+        ctxline = (f"5일 {ctx.get('ret_5',0)*100:+.1f}%, 20일 {ctx.get('ret_20',0)*100:+.1f}%, "
+                   f"60일 {ctx.get('ret_60',0)*100:+.1f}%, 60일고점대비 {ctx.get('gap_high60',0)*100:+.1f}%"
+                   f"{', 신고가 부근' if ctx.get('near_high') else ''}") if ctx else "지표 없음"
+        act = "매수" if tr["side"] == "BUY" else "매도"
+        reject_note = " (딜러가 최종 거절함)" if tr.get("dealer_rejected") else ""
+        if llm.available():
+            system = ("너는 국민은행 주식 딜러다. 과거 거래에 대한 감사·소명 질의에 답한다. "
+                      "저장된 거래 맥락(선정 전략·종목 흐름)을 근거로, 왜 그 거래를 했는지 한국어로 간결히 설명한다. "
+                      "질문이 있으면 그 질문에 초점을 맞춰 답한다.")
+            user = (f"[거래] {tid} · {tr['date']} · {tr['name']}({tr['code']}) {act} "
+                    f"{tr['qty']:,}주 @ {tr['price']:,}원{reject_note}\n"
+                    f"[선정 전략] {tr['algo_kr']}\n[당시 종목 흐름] {ctxline}\n"
+                    f"[거래 시점 기록된 사유] {saved}\n\n[질문] {q}")
+            ans = llm.chat(system, user, max_tokens=260)
+            if ans:
+                return jsonify({"answer": ans, "by": "LLM(ChatGPT 4o)", "found": True, "kind": "trade",
+                    "trade": {"id": tid, "date": tr["date"], "name": tr["name"], "side": act,
+                              "algo_kr": tr["algo_kr"], "qty": tr["qty"], "price": tr["price"],
+                              "dealer_rejected": tr.get("dealer_rejected", False)}})
+        ans = (f"{tr['date']} {tr['algo_kr']} 전략 선정에 따라 {tr['name']}를 {act}했습니다.\n"
+               f"사유: {saved}\n당시 흐름: {ctxline}.{reject_note}")
+        return jsonify({"answer": ans, "by": "규칙", "found": True, "kind": "trade",
+            "trade": {"id": tid, "date": tr["date"], "name": tr["name"], "side": act,
+                      "algo_kr": tr["algo_kr"], "qty": tr["qty"], "price": tr["price"],
+                      "dealer_rejected": tr.get("dealer_rejected", False)}})
+
+    # ── 거래번호가 문장에 있었지만 못 찾음 ──
+    if tid:
         return jsonify({"answer": f"거래번호 {tid} 를 찾을 수 없습니다.", "by": "-", "found": False})
-    saved = tr.get("reason", "")          # 거래 시점에 저장된 매매 이유
-    ctx = tr.get("ctx") or {}
-    ctxline = (f"5일 {ctx.get('ret_5',0)*100:+.1f}%, 20일 {ctx.get('ret_20',0)*100:+.1f}%, "
-               f"60일 {ctx.get('ret_60',0)*100:+.1f}%, 60일고점대비 {ctx.get('gap_high60',0)*100:+.1f}%"
-               f"{', 신고가 부근' if ctx.get('near_high') else ''}") if ctx else "지표 없음"
-    act = "매수" if tr["side"] == "BUY" else "매도"
-    reject_note = " (딜러가 최종 거절함)" if tr.get("dealer_rejected") else ""
+
+    # ── 거래번호 없음: KRX 규정 검색(RAG) ──
+    from mo_engine import search_documents
+    regs = search_documents(q, k=3)
+    reg_lines = [{"id": r["id"], "title": r["title"], "text": r["text"]} for r in regs]
     if llm.available():
-        system = ("너는 국민은행 주식 딜러다. 과거 거래에 대한 감사·소명 질의에 답한다. "
-                  "저장된 거래 맥락(선정 전략·종목 흐름)을 근거로, 왜 그 거래를 했는지 한국어로 간결히 설명한다. "
-                  "질문이 있으면 그 질문에 초점을 맞춰 답한다.")
-        user = (f"[거래] {tid} · {tr['date']} · {tr['name']}({tr['code']}) {act} "
-                f"{tr['qty']:,}주 @ {tr['price']:,}원{reject_note}\n"
-                f"[선정 전략] {tr['algo_kr']}\n[당시 종목 흐름] {ctxline}\n"
-                f"[거래 시점 기록된 사유] {saved}\n\n"
-                f"[질문] {q or '이 거래를 한 이유가 무엇인가?'}")
-        ans = llm.chat(system, user, max_tokens=260)
+        system = ("너는 국민은행 주식 딜링데스크의 M/O 규정 심사역이다. "
+                  "아래 KRX 규정 조항(RAG 검색 결과)만을 근거로 사용자의 질문에 한국어로 간결히 답한다. "
+                  "관련 규정 번호(REG-00X)를 함께 언급한다. 근거에 없는 내용은 추측하지 않는다.")
+        ref = "\n".join(f"[{r['id']}] {r['title']}: {r['text']}" for r in reg_lines)
+        ans = llm.chat(system, f"[질문] {q}\n\n[관련 규정(RAG)]\n{ref}", max_tokens=280)
         if ans:
-            return jsonify({"answer": ans, "by": "LLM(ChatGPT 4o)", "found": True, "trade": {
-                "id": tid, "date": tr["date"], "name": tr["name"], "side": act,
-                "algo_kr": tr["algo_kr"], "qty": tr["qty"], "price": tr["price"],
-                "dealer_rejected": tr.get("dealer_rejected", False)}})
-    # 규칙 폴백
-    ans = (f"{tr['date']} {tr['algo_kr']} 전략 선정에 따라 {tr['name']}를 {act}했습니다.\n"
-           f"사유: {saved}\n당시 흐름: {ctxline}.{reject_note}")
-    return jsonify({"answer": ans, "by": "규칙", "found": True, "trade": {
-        "id": tid, "date": tr["date"], "name": tr["name"], "side": act,
-        "algo_kr": tr["algo_kr"], "qty": tr["qty"], "price": tr["price"],
-        "dealer_rejected": tr.get("dealer_rejected", False)}})
+            return jsonify({"answer": ans, "by": "LLM(ChatGPT 4o) · RAG", "found": True,
+                            "kind": "reg", "regs": reg_lines})
+    # 규칙 폴백: 검색된 규정 조항을 그대로 제시
+    ans = "관련 규정:\n" + "\n".join(f"· [{r['id']}] {r['title']} — {r['text']}" for r in reg_lines)
+    return jsonify({"answer": ans, "by": "규칙 · RAG", "found": True, "kind": "reg", "regs": reg_lines})
 
 
 def try_update_prices():
