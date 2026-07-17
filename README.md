@@ -54,7 +54,7 @@ python kr_backtest.py
 
 ### 3) 웹 딜링 데스크 데모
 ```
-python app.py            # http://localhost:5000
+python sim_server.py            # http://localhost:5001
 ```
 → 브라우저에서 「딜링 실행」:
    선정 → 주문 → M/O 규정검사 → (근거+비교그래프) 최종 승인 팝업 → 체결 → 로그
