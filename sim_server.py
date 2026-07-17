@@ -10,6 +10,7 @@
 - 매수/매도 종목명+확인, 반려 사유+확인
 """
 import os
+import json
 from flask import Flask, jsonify, request, send_file
 import pandas as pd
 
@@ -437,7 +438,7 @@ def explain_trade(code, name, side, algo_kr, ctx, kind=""):
     """LLM(ChatGPT 4o)이 매수/매도 근거를 한국어 1~2문장으로 설명. 실패 시 규칙 문장."""
     if not llm.available() or not ctx:
         return _rule_reason(side, algo_kr, ctx, kind)
-    system = ("너는 한국 증권사 딜러다. 선정된 전략과 종목의 최근 흐름을 근거로 "
+    system = ("너는 국민은행 주식 딜러다. 선정된 전략과 종목의 최근 흐름을 근거로 "
               "왜 이 종목을 사는지/파는지 한국어 1~2문장으로 간결히 설명한다. 과장 없이 수치를 근거로.")
     act = "매수" if side == "BUY" else "매도"
     extra = {"축소": " (월간 손실한도로 운용한도가 축소돼 강제 매도)",
@@ -519,6 +520,37 @@ def sim_dealer_reject():
     return jsonify({"ok": True, "rejected": {"tid": tid, "name": tr["name"]}, "substitute": sub})
 
 
+@app.route("/api/sim/mcp_review", methods=["POST"])
+def sim_mcp_review():
+    """[4주차 MCP] 거래번호의 주문을 MCP 도구로 심사한다.
+    에이전트가 tools/list 로 도구 목록을 받고, 어떤 도구를 쓸지 골라 tools/call 로 실행한 결과를 반환."""
+    req = request.get_json(force=True)
+    tid = req.get("tid", "").strip().upper()
+    tr = S.get("trades", {}).get(tid)
+    if not tr:
+        return jsonify({"ok": False, "msg": f"거래번호 {tid} 를 찾을 수 없습니다."})
+    code = tr["code"]
+    try:
+        dday = pd.Timestamp(tr["date"]); adv = krdata.adv(dday, code)
+    except Exception:
+        adv = None
+    order = {"symbol": code, "name": tr["name"], "side": tr.get("side", "BUY"),
+             "price": tr["price"], "qty": tr["qty"],
+             "order_value": int(tr["price"] * tr["qty"]),
+             "halted": False, "vi_active": False, "adv": adv}
+    try:
+        import subprocess, sys as _sys
+        proc = subprocess.run([_sys.executable, os.path.join(HERE, "mcp_client.py"),
+                               "--order", json.dumps(order)],
+                              capture_output=True, text=True, timeout=60, cwd=HERE)
+        line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
+        out = json.loads(line)
+        return jsonify({"ok": True, "tid": tid, "name": tr["name"],
+                        "order": {"price": tr["price"], "qty": tr["qty"], "adv": adv}, **out})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": f"MCP 심사 실패: {e}"})
+
+
 @app.route("/api/sim/ask", methods=["POST"])
 def sim_ask():
     """거래번호로 '왜 이 거래를 했는지' 소명 질의 → LLM이 저장된 맥락으로 답변."""
@@ -535,7 +567,7 @@ def sim_ask():
     act = "매수" if tr["side"] == "BUY" else "매도"
     reject_note = " (딜러가 최종 거절함)" if tr.get("dealer_rejected") else ""
     if llm.available():
-        system = ("너는 한국 증권사 딜러다. 과거 거래에 대한 감사·소명 질의에 답한다. "
+        system = ("너는 국민은행 주식 딜러다. 과거 거래에 대한 감사·소명 질의에 답한다. "
                   "저장된 거래 맥락(선정 전략·종목 흐름)을 근거로, 왜 그 거래를 했는지 한국어로 간결히 설명한다. "
                   "질문이 있으면 그 질문에 초점을 맞춰 답한다.")
         user = (f"[거래] {tid} · {tr['date']} · {tr['name']}({tr['code']}) {act} "

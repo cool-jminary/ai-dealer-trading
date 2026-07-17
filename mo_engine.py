@@ -112,6 +112,7 @@ class MOResult:
     flags: list = field(default_factory=list)     # 차단 아님(보고 대상 등)
     feedback: str = ""
     llm: dict = None                               # LLM(ChatGPT 4o) 규정 판단 {verdict,reason,regs}
+    mcp: dict = None                               # MCP 도구선택·호출 결과 {tool_selection_by,calls}
 
     def as_dict(self):
         return {"passed": self.passed,
@@ -129,7 +130,7 @@ def _clause(rid):
 # ======================================================================
 # 컴플라이언스 검사 (실제 규정 룰) — 각 위반은 조항을 출처로 인용
 # ======================================================================
-def check_compliance(o: dict, use_llm: bool = False) -> MOResult:
+def check_compliance(o: dict, use_llm: bool = False, use_mcp: bool = False) -> MOResult:
     v, flags = [], []
 
     if o.get("halted"):                                              # 거래정지
@@ -184,6 +185,14 @@ def check_compliance(o: dict, use_llm: bool = False) -> MOResult:
         fb = "위반 " + ", ".join(x.reg_id for x in v) + " → 주문 반려, 시니어 딜러에 사유 반환"
     result = MOResult(passed, v, flags, fb)
 
+    # ── MCP(4주차): 에이전트가 MCP 도구를 골라 규정검색·시장충격 조회 ──
+    if use_mcp:
+        try:
+            import mcp_client
+            result.mcp = mcp_client.review_order_sync(o)
+        except Exception as e:
+            result.mcp = {"error": str(e)}
+
     # ── LLM(ChatGPT 4o) 규정 판단 부착 (하드룰은 위에서 이미 안전하게 확정) ──
     if use_llm:
         result.llm = judge_order_llm(o, result)
@@ -199,7 +208,7 @@ def judge_order_llm(o: dict, base: MOResult):
     regs = search_documents(f"{o.get('name','')} {o.get('side','')} 주문 가격 {o.get('price')}", k=3)
     reg_text = "\n".join(f"[{r['id']}] {r['title']}: {r['text']}" for r in regs)
     rule_find = "; ".join(f"{x.reg_id} {x.message}" for x in base.violations) or "규칙 검사상 하드룰 위반 없음"
-    system = ("너는 한국 증권사 딜링데스크의 미들·백오피스(M/O) 규정 심사역이다. "
+    system = ("너는 국민은행 주식 딜링데스크의 미들·백오피스(M/O) 규정 심사역이다. "
               "주어진 주문과 KRX 규정 조항을 근거로 위반 여부를 판정하고 근거를 한국어 2문장 이내로 설명한다. "
               "거래정지·가격제한폭·VI 등 명백한 하드룰 위반은 그대로 반영하고, "
               "자전거래·시세조종 정황 등 판단이 필요한 부분도 지적한다. "
