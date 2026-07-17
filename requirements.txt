@@ -1,0 +1,8 @@
+flask
+finance-datareader
+pandas
+tqdm
+certifi
+scikit-learn
+langgraph
+pykrx

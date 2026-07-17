@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 시니어 딜러 · KRX 딜링 데스크</title>
+<style>
+  :root{
+    --bg:#0c121d; --panel:#121c2b; --panel2:#0f1825; --line:#20304a;
+    --text:#e9eef7; --muted:#8598b3; --dim:#5f7089;
+    --gold:#d7b36b; --green:#37c98b; --amber:#e3a63a; --red:#e4685f; --blue:#5b9bd6; --purple:#8e86e0;
+    --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:"Pretendard","Apple SD Gothic Neo",-apple-system,"맑은 고딕","Malgun Gothic",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;min-height:100vh;font-size:14px}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  header{display:flex;align-items:center;gap:20px;padding:14px 22px;
+    border-bottom:1px solid var(--line);background:linear-gradient(180deg,#131f30,#0f1825)}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:34px;height:34px;border-radius:8px;border:1px solid #3a4f72;
+    display:grid;place-items:center;background:#0e1826;color:var(--gold);font-weight:700;font-size:15px}
+  .brand h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
+  .brand p{margin:2px 0 0;font-size:11.5px;color:var(--muted)}
+  .session{margin-left:auto;display:flex;align-items:center;gap:18px}
+  .clock{font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);display:inline-block;margin-right:6px}
+  .run{appearance:none;border:1px solid #4a6a3e;background:linear-gradient(180deg,#1c3326,#16281e);
+    color:#bfeccd;font-family:var(--sans);font-size:13.5px;font-weight:600;padding:9px 18px;border-radius:8px;cursor:pointer;transition:.15s}
+  .run:hover{background:linear-gradient(180deg,#224030,#182e22);border-color:#5c8a4c}
+  .run:disabled{opacity:.45;cursor:not-allowed}
+  .run.reset{border-color:#3a4f72;background:#101a28;color:var(--muted)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+  .kpi{background:var(--panel2);padding:12px 18px}
+  .kpi .k{font-size:11px;color:var(--muted);letter-spacing:.3px}
+  .kpi .v{font-family:var(--mono);font-size:22px;margin-top:3px;font-weight:600}
+  .kpi .v.g{color:var(--green)} .kpi .v.a{color:var(--amber)} .kpi .v.r{color:var(--red)}
+  main{display:grid;grid-template-columns:270px 1fr 340px;gap:1px;background:var(--line);height:calc(100vh - 118px)}
+  .col{background:var(--panel);overflow:auto;padding:16px}
+  .col h2{font-size:11.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:0 0 12px;font-weight:600}
+  .agent{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:9px;background:var(--panel2);position:relative;transition:.25s}
+  .agent .an{font-weight:600;font-size:13px}
+  .agent .as{font-size:11px;color:var(--muted);margin-top:2px}
+  .agent .row{display:flex;justify-content:space-between;align-items:baseline;margin-top:7px}
+  .agent .sh{font-family:var(--mono);font-size:15px}
+  .agent .lab{font-size:10.5px;color:var(--muted)}
+  .agent.win{border-color:var(--gold);background:linear-gradient(180deg,#1c2436,#141c2b);box-shadow:0 0 0 1px #d7b36b33}
+  .badge-win{position:absolute;top:-9px;right:10px;background:var(--gold);color:#20170a;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+  .sh.pos{color:var(--green)} .sh.neg{color:var(--red)}
+  .chosen{margin-top:6px;padding:10px;border:1px dashed #3a4f72;border-radius:9px;font-size:12px;color:var(--muted)}
+  .chosen b{color:var(--gold)}
+  .why{font-size:12.5px;line-height:1.65;color:#cdd8e8;background:#0e1725;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:12px}
+  .why .wt{color:var(--gold);font-weight:700;font-size:11.5px;display:block;margin-bottom:4px}
+  .cmp{margin-top:12px}
+  .cmp .ct{font-size:11px;color:var(--muted);margin-bottom:7px}
+  .cmp .crow{display:flex;align-items:center;gap:8px;margin:5px 0}
+  .cmp .cname{width:64px;color:var(--muted);text-align:right;font-size:11px}
+  .cmp .cbar{height:15px;border-radius:4px;background:#2a3a52;min-width:3px;transition:width .5s}
+  .cmp .cbar.win{background:var(--gold)}
+  .cmp .cval{font-family:var(--mono);font-size:10.5px;color:#b9c8d8;white-space:nowrap}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+  td{padding:10px;border-bottom:1px solid #172234}
+  td.r{text-align:right;font-family:var(--mono)}
+  tr.order:hover{background:#141f30}
+  tr.row-fill{box-shadow:inset 3px 0 0 var(--green)}
+  tr.row-rej td{background:#241416}
+  tr.row-rej{box-shadow:inset 3px 0 0 var(--red)}
+  .tk{font-family:var(--mono);color:var(--muted);font-size:11px}
+  .rej-rs{font-size:10.5px;color:var(--red);margin-top:3px}
+  .status{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap}
+  .s-fill{color:var(--green);background:#12281e}
+  .s-rej{color:var(--red);background:#2a1616}
+  /* 딜러 승인 대기 리스트 (노란 테두리) */
+  .pend{margin-bottom:16px}
+  .pend-title{font-size:11px;color:var(--amber);letter-spacing:.4px;margin-bottom:9px;font-weight:700;
+    display:flex;align-items:center;gap:6px}
+  .pcard{border:1.5px solid var(--amber);border-radius:10px;padding:11px 12px;margin-bottom:9px;
+    background:#1b1810;box-shadow:0 0 0 1px #e3a63a2e;animation:in .3s forwards}
+  .pcard .pn{font-weight:600;font-size:13px}
+  .pcard .pmeta{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.55}
+  .pcard .pmeta .rs{color:var(--amber)}
+  .pcard .pbtns{display:flex;gap:8px;margin-top:10px}
+  .pcard .pbtns button{flex:1;padding:8px;border-radius:8px;font-family:var(--sans);font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid}
+  .approve{background:linear-gradient(180deg,#1d3a28,#16301f);border-color:#3f7a4f;color:#c6f0d3}
+  .approve:hover{background:linear-gradient(180deg,#245033,#1a3d28)}
+  .reject{background:#241620;border-color:#6a3540;color:#f0c6cf}
+  .reject:hover{background:#301a24}
+  .flash{animation:flash .8s ease-out}
+  @keyframes flash{0%{background:#1d3a2a}100%{background:transparent}}
+  .empty{color:var(--dim);text-align:center;padding:50px 0;font-size:13px}
+  #log{font-family:var(--mono);font-size:12px;line-height:1.85}
+  .lg{display:flex;gap:9px;padding:1px 0;opacity:0;animation:in .3s forwards}
+  @keyframes in{to{opacity:1}}
+  .lg .t{color:var(--dim);flex-shrink:0}
+  .lg.sel .m{color:var(--purple)} .lg.mo .m{color:var(--blue)}
+  .lg.fill .m{color:var(--green)} .lg.rej .m{color:var(--red)}
+  .lg.hum .m{color:var(--amber)} .lg .m{color:#cdd8e8}
+  .lg.err .m{color:var(--red)}
+  #toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:10px;z-index:60}
+  .toast{background:linear-gradient(180deg,#16281e,#122117);border:1px solid #2f6a45;border-radius:11px;padding:12px 16px;min-width:270px;box-shadow:0 14px 40px #0008;animation:slide .35s ease-out}
+  @keyframes slide{from{transform:translateX(30px);opacity:0}}
+  .toast .tt{font-size:12.5px;font-weight:700;color:var(--green);display:flex;align-items:center;gap:7px}
+  .toast .td{font-size:12px;color:#b9c8d8;margin-top:4px;font-family:var(--mono)}
+  .toast.rej{border-color:#6a3535}.toast.rej .tt{color:var(--red)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  @media (max-width:900px){main{grid-template-columns:1fr;height:auto}.kpis{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">₩</div>
+    <div><h1>AI 시니어 딜러 · KRX 딜링 데스크</h1>
+      <p>실데이터 파이프라인 · 선정 → 주문 → M/O → 시가 자동체결 / 딜러 개별 승인</p></div>
+  </div>
+  <div class="session">
+    <span class="clock"><span class="dot"></span>정규장 · <span id="clock">09:00:00</span></span>
+    <button class="run" id="runBtn" onclick="run()">딜링 실행</button>
+    <button class="run reset" id="resetBtn" onclick="reset()" style="display:none">다시 실행</button>
+  </div>
+</header>
+
+<div class="kpis">
+  <div class="kpi"><div class="k">채택 (반감기 · 전략)</div><div class="v" id="kAgent" style="font-size:15px">—</div></div>
+  <div class="kpi"><div class="k">체결 종목</div><div class="v g" id="kFill">0</div></div>
+  <div class="kpi"><div class="k">집행 금액 (시가)</div><div class="v" id="kNotional">₩0</div></div>
+  <div class="kpi"><div class="k">반려 · 결재대기</div><div class="v r" id="kRej">0 · 0</div></div>
+</div>
+
+<main>
+  <section class="col">
+    <h2>전략 선정 · 반감기 비교</h2>
+    <div id="agents"><div class="empty" style="padding:20px 0">‘딜링 실행’ 시<br>실데이터로 선정합니다</div></div>
+    <div id="chosen"></div>
+    <div id="rationale"></div>
+    <div id="cmp"></div>
+  </section>
+  <section class="col">
+    <h2>주문 블로터 · 체결 / 반려</h2>
+    <div class="pend" id="pendingWrap" style="display:none">
+      <div class="pend-title">⧖ 딜러 승인 필요 (30억 이상)</div>
+      <div id="pending"></div>
+    </div>
+    <table>
+      <thead><tr><th>종목</th><th>구분</th><th style="text-align:right">수량</th>
+        <th style="text-align:right">체결가</th><th style="text-align:right">금액</th><th>상태</th></tr></thead>
+      <tbody id="blotter"><tr><td colspan="6"><div class="empty">‘딜링 실행’을 누르면 자동 체결·반려 결과가 표시됩니다.</div></td></tr></tbody>
+    </table>
+  </section>
+  <section class="col">
+    <h2>실시간 감사 로그</h2>
+    <div id="log"></div>
+  </section>
+</main>
+<div id="toasts"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const won=v=>"₩"+v.toLocaleString("ko-KR");
+const eok=v=>(v/1e8).toFixed(1)+"억";
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let clk=9*3600, fills=0, notional=0, rejected=0, pending=0;
+const ORD={};                       // code -> order (승인/반려 버튼에서 참조)
+
+function tick(){clk++;const h=(clk/3600|0)%24,m=(clk/60|0)%60,s=clk%60;
+  $("#clock").textContent=[h,m,s].map(x=>String(x).padStart(2,"0")).join(":");}
+setInterval(tick,1000);
+function stamp(){const h=(clk/3600|0)%24,m=(clk/60|0)%60,s=clk%60;
+  return [h,m,s].map(x=>String(x).padStart(2,"0")).join(":");}
+function log(msg,cls=""){clk+=Math.floor(Math.random()*3)+1;
+  const d=document.createElement("div");d.className="lg "+cls;
+  d.innerHTML=`<span class="t">${stamp()}</span><span class="m">${msg}</span>`;
+  $("#log").appendChild(d);$("#log").scrollTop=$("#log").scrollHeight;}
+function toast(detail,rej=false){const t=document.createElement("div");t.className="toast"+(rej?" rej":"");
+  t.innerHTML=`<div class="tt">${rej?"✗ 반려":"✓ 체결 완료"}</div><div class="td">${detail}</div>`;
+  $("#toasts").appendChild(t);setTimeout(()=>t.remove(),4200);}
+function setKPI(){$("#kFill").textContent=fills;$("#kNotional").textContent=won(notional);
+  $("#kRej").textContent=rejected+" · "+pending;}
+
+function renderSelection(sel,chosen){
+  $("#agents").innerHTML="";
+  sel.forEach(a=>{
+    const el=document.createElement("div");el.className="agent"+(a.chosen?" win":"");
+    el.innerHTML=`${a.chosen?'<span class="badge-win">채택</span>':''}
+      <div class="an">반감기 ${a.halflife}</div><div class="as">${a.winner_kr} · 우승</div>
+      <div class="row"><span class="lab">가중 샤프(학습)</span>
+      <span class="sh ${a.wsharpe>=0?'pos':'neg'}">${a.wsharpe.toFixed(2)}</span></div>`;
+    $("#agents").appendChild(el);
+  });
+  $("#chosen").innerHTML=`<div class="chosen">시스템 채택: <b>반감기 ${chosen.halflife} · ${chosen.agent_kr}</b><br>
+    <span style="font-size:11px">최근 수익률 가중이 이 국면에 가장 유효</span></div>`;
+}
+function drawComparison(comparison){
+  const maxS=Math.max(...comparison.map(c=>Math.abs(c.valid_sharpe)),0.1);
+  return comparison.map(c=>{
+    const w=Math.max(3,Math.abs(c.valid_sharpe)/maxS*150);
+    const sign=c.valid_return>=0?"+":"";
+    return `<div class="crow"><span class="cname">${c.agent_kr}</span>
+      <div class="cbar ${c.chosen?'win':''}" style="width:${w}px"></div>
+      <span class="cval">샤프 ${c.valid_sharpe.toFixed(2)} · ${sign}${c.valid_return}%</span></div>`;
+  }).join("");
+}
+function renderRationale(data){
+  $("#rationale").innerHTML=`<div class="why"><span class="wt">🎯 선정 근거
+    <span style="font-size:10px;color:${data.llm_on?'#37c98b':'#8598b3'};border:1px solid currentColor;border-radius:8px;padding:1px 6px;margin-left:4px">${data.rationale_by||'규칙'}</span></span>${data.rationale}</div>`;
+  $("#cmp").innerHTML=`<div class="cmp"><div class="ct">후보 전략 검증 성과 (막대 = 검증 샤프, 금색 = 채택)</div>${drawComparison(data.comparison)}</div>`;
+}
+
+function clearBlotterPlaceholder(){const tb=$("#blotter");if(tb.querySelector(".empty"))tb.innerHTML="";}
+function addBlotterRow(o,state){           // state: 'fill' | 'rej'
+  clearBlotterPlaceholder();
+  const tb=$("#blotter");const tr=document.createElement("tr");
+  tr.className="order "+(state==='fill'?'row-fill':'row-rej');
+  const priceShown=state==='fill'?o.fill_price:o.price;
+  const valShown  =state==='fill'?o.fill_value:o.value;
+  const statusHtml=state==='fill'
+    ? `<span class="status s-fill">체결</span>`
+    : `<span class="status s-rej">반려</span>`;
+  const sub=state==='fill'
+    ? `<div class="tk">${o.code} · 시가체결</div>`
+    : `<div class="tk">${o.code}</div>${(o.reasons&&o.reasons.length)?`<div class="rej-rs">${o.reasons.join(", ")}</div>`:''}`;
+  tr.innerHTML=`<td><div>${o.name}</div>${sub}</td><td>매수</td>
+    <td class="r">${o.qty.toLocaleString()}</td><td class="r">${priceShown.toLocaleString()}</td>
+    <td class="r">${eok(valShown)}</td><td>${statusHtml}</td>`;
+  tb.appendChild(tr);tr.classList.add("flash");
+}
+function addPendingCard(o){
+  $("#pendingWrap").style.display="block";
+  const d=document.createElement("div");d.className="pcard";d.id="pc-"+o.code;
+  d.innerHTML=`<div class="pn">${o.name} <span class="tk">${o.code}</span></div>
+    <div class="pmeta">매수 ${o.qty.toLocaleString()}주 @ ${won(o.price)} · 금액 ${eok(o.value)}
+      <br><span class="rs">⚠ ${o.reasons.join(", ")}</span></div>
+    <div class="pbtns"><button class="approve" onclick="approve('${o.code}')">승인</button>
+      <button class="reject" onclick="decline('${o.code}')">반려</button></div>`;
+  $("#pending").appendChild(d);
+}
+function removeCard(code){const c=$("#pc-"+code);if(c)c.remove();
+  if(!$("#pending").children.length)$("#pendingWrap").style.display="none";}
+
+async function postDecision(payload){
+  try{await fetch("/api/decision",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(payload)});}catch(e){}
+}
+
+function approve(code){                     // 딜러 개별 승인 → 시가 체결
+  const o=ORD[code];if(!o)return;
+  removeCard(code);pending--;
+  addBlotterRow(o,'fill');fills++;notional+=o.fill_value;setKPI();
+  log(`[결재] ${o.name} 승인 → 시가 체결 ${o.qty.toLocaleString()}주 @ ${won(o.fill_price)}`,"fill");
+  toast(`${o.name} ${o.qty.toLocaleString()}주 @ ${won(o.fill_price)} (시가)`);
+  postDecision({code,decision:"APPROVED"});
+}
+function decline(code){                     // 딜러 개별 반려
+  const o=ORD[code];if(!o)return;
+  removeCard(code);pending--;rejected++;
+  o.reasons=["딜러 반려"];
+  addBlotterRow(o,'rej');setKPI();
+  log(`[결재] ${o.name} 딜러 반려`,"rej");
+  toast(`${o.name} · 딜러 반려`,true);
+  postDecision({code,decision:"REJECTED"});
+}
+
+async function run(){
+  $("#runBtn").disabled=true;
+  log("세션 시작 · 서버 파이프라인 호출","sel");
+  let data;
+  try{ data=await (await fetch("/api/pipeline")).json(); }
+  catch(e){ log("서버 연결 실패 — app.py로 실행해야 실데이터가 연동됩니다","err");
+    $("#runBtn").disabled=false; return; }
+
+  // 1) 선정 + 근거
+  renderSelection(data.selection,data.chosen);
+  renderRationale(data);
+  await sleep(300);
+  data.selection.forEach(a=>log(`[선정] 반감기 ${a.halflife} → ${a.winner_kr} 가중샤프 ${a.wsharpe.toFixed(2)}`,"sel"));
+  log(`[선정] 채택 → 반감기 ${data.chosen.halflife} · ${data.chosen.agent_kr}`,"sel");
+  $("#kAgent").textContent=`${data.chosen.halflife} · ${data.chosen.agent_kr}`;
+  await sleep(400);
+
+  // 2) 주문 → M/O 검사 → 3분류 처리
+  $("#blotter").innerHTML="";
+  clearBlotterPlaceholder();
+  log(`[딜러] ${data.chosen.agent_kr} 포트폴리오 → ${data.orders.length}개 매수 주문`,"");
+  await sleep(300);
+
+  for(const o of data.orders){
+    ORD[o.code]=o;
+    log(`[M/O] ${o.name} 규정 검색(RAG)·검사`,"mo");
+    await sleep(340);
+    if(o.llm&&o.llm.reason){log(`[M/O·LLM] ${o.name} — ${o.llm.verdict}: ${o.llm.reason}`,"hum");await sleep(150);}
+    if(o.verdict==="REJECTED"){
+      addBlotterRow(o,'rej');rejected++;setKPI();
+      log(`[M/O] ${o.name} 반려 — ${o.reasons.join(", ")}`,"rej");
+      toast(`${o.name} · ${o.reasons.join(", ")}`,true);
+    }else if(o.verdict==="NEEDS_HUMAN"){
+      addPendingCard(o);pending++;setKPI();
+      log(`[M/O] ${o.name} 통과 · 30억↑/주의 → 딜러 승인 대기`,"hum");
+    }else{ // AUTO — 시가 즉시 체결
+      addBlotterRow(o,'fill');fills++;notional+=o.fill_value;setKPI();
+      log(`[체결] ${o.name} 자동승인 → 시가 체결 ${o.qty.toLocaleString()}주 @ ${won(o.fill_price)}`,"fill");
+      toast(`${o.name} ${o.qty.toLocaleString()}주 @ ${won(o.fill_price)} (시가)`);
+      postDecision({code:o.code,decision:"AUTO_FILLED"});
+    }
+    await sleep(240);
+  }
+
+  // 3) 딜러 개별 승인 안내
+  if(pending>0) log(`[M/O] 딜러 승인 필요 ${pending}건 — 각 항목의 승인/반려 버튼으로 개별 결재`,"hum");
+  log(`1차 처리 완료 · 자동체결 ${fills} / 반려 ${rejected} / 승인대기 ${pending}`,"");
+  $("#resetBtn").style.display="inline-block";
+}
+async function reset(){
+  fills=0;notional=0;rejected=0;pending=0;setKPI();$("#kAgent").textContent="—";
+  for(const k in ORD)delete ORD[k];
+  $("#log").innerHTML="";
+  $("#agents").innerHTML='<div class="empty" style="padding:20px 0">‘딜링 실행’ 시<br>실데이터로 선정합니다</div>';
+  $("#chosen").innerHTML="";$("#rationale").innerHTML="";$("#cmp").innerHTML="";
+  $("#pending").innerHTML="";$("#pendingWrap").style.display="none";
+  $("#blotter").innerHTML='<tr><td colspan="6"><div class="empty">‘딜링 실행’을 누르면 자동 체결·반려 결과가 표시됩니다.</div></td></tr>';
+  try{await fetch("/api/reset",{method:"POST"});}catch(e){}
+  $("#runBtn").disabled=false;$("#resetBtn").style.display="none";
+}
+</script>
+</body>
+</html>
